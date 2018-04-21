@@ -824,15 +824,36 @@ static void __toggle_membership(server_t* node)
     }
 }
 
+typedef enum
+{
+    PUSH_ENTRY,
+    POLL_MESSAGES,
+    TOGGLE_MEMBERSHIP
+
+} scheduler_action;
+
+
+static scheduler_action __schedule_action() 
+{
+    return PUSH_ENTRY;
+}
+
 static void __periodic(system_t* sys)
 {
     if (opts.debug)
         printf("\n");
 
-    if (random() % 100 < sys->client_rate)
-        __push_entry(sys);
+    scheduler_action action = __schedule_action();
 
-    __poll_messages(sys);
+    if (action == PUSH_ENTRY) {
+	__push_entry(sys);
+    }
+    //if (random() % 100 < sys->client_rate)
+    //    __push_entry(sys);
+
+    if (action == POLL_MESSAGE) {
+    	__poll_messages(sys);
+    }
 
     int i;
     for (i = 0; i < sys->n_servers; i++)
