@@ -1,0 +1,8 @@
+argv = ['waf', 'configure']
+environ = {'TERM_SESSION_ID': 'E4AA2341-E89E-4D19-B44F-933F18F1FCF3', 'XPC_SERVICE_NAME': '0', 'VERSIONER_PYTHON_PREFER_32_BIT': 'no', 'TERM_PROGRAM_VERSION': '388.1.2', 'TMPDIR': '/var/folders/pj/bbtf46_d2ys84c0wzt3ph3bc0000gn/T/', 'SSH_AUTH_SOCK': '/private/tmp/com.apple.launchd.hNZo0gRgF8/Listeners', 'SHELL': '/bin/bash', 'LOGNAME': 'mathewpregasen', 'USER': 'mathewpregasen', 'HOME': '/Users/mathewpregasen', 'PATH': '/Applications/MAMP/bin/php/php7.1.1/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', 'MAKEFLAGS': '', 'TERM_PROGRAM': 'Apple_Terminal', 'LANG': 'en_US.UTF-8', 'TERM': 'vt100', 'Apple_PubSub_Socket_Render': '/private/tmp/com.apple.launchd.y6RO6YUTHy/Render', 'VERSIONER_PYTHON_VERSION': '2.7', 'SHLVL': '1', 'OLDPWD': '/Users/mathewpregasen/dev/virtraft/build', 'XPC_FLAGS': '0x0', '__CF_USER_TEXT_ENCODING': '0x1F5:0x0:0x0', 'MAKELEVEL': '1', 'PWD': '/Users/mathewpregasen/dev/virtraft', '_': '/usr/bin/make', 'MFLAGS': ''}
+files = ['/Users/mathewpregasen/dev/virtraft/wscript']
+hash = '4\x8e\x18\x9e\xd9\xdf\x88\xb9\xc9(\x02\x97\xff\x0b1\xe6'
+options = {'files': '', 'jobs': 4, 'verbose': 0, 'progress_bar': 0, 'distcheck_args': None, 'top': '', 'colors': 'auto', 'destdir': '', 'keep': 0, 'zones': '', 'prefix': '/usr/local/', 'download': False, 'force': False, 'targets': '', 'check_c_compiler': None, 'out': ''}
+out_dir = '/Users/mathewpregasen/dev/virtraft/build'
+run_dir = '/Users/mathewpregasen/dev/virtraft'
+top_dir = '/Users/mathewpregasen/dev/virtraft'

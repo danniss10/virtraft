@@ -11,6 +11,7 @@
 #define RAFT_H_
 
 #define RAFT_ERR_NOT_LEADER                  -2
+#define RAFT_ERR_NOT_VICE_LEADER             -6
 #define RAFT_ERR_ONE_VOTING_CHANGE_ONLY      -3
 #define RAFT_ERR_SHUTDOWN                    -4
 #define RAFT_ERR_NOMEM                       -5
@@ -24,7 +25,9 @@ typedef enum {
     RAFT_STATE_NONE,
     RAFT_STATE_FOLLOWER,
     RAFT_STATE_CANDIDATE,
-    RAFT_STATE_LEADER
+    RAFT_STATE_LEADER,
+    RAFT_STATE_VICE_CANDIDATE,
+    RAFT_STATE_VICE_LEADER
 } raft_state_e;
 
 typedef enum {
@@ -95,6 +98,24 @@ typedef struct
     int last_log_term;
 } msg_requestvote_t;
 
+/** Vice Vote request message.
+ * Sent to nodes when a server wants to become leader.
+ * This message could force a leader/candidate to become a follower. */
+typedef struct
+{
+    /** currentTerm, to force other vice leader/candidate to step down */
+    int vice_term;
+
+    /** candidate requesting vote */
+    int vice_candidate_id;
+
+    /** index of candidate's last log entry */
+    int last_log_idx;
+
+    /** term of candidate's last log entry */
+    int last_log_term;
+} msg_requestvicevote_t;
+
 /** Vote request response message.
  * Indicates if node has accepted the server's vote request. */
 typedef struct
@@ -105,6 +126,17 @@ typedef struct
     /** true means candidate received vote */
     int vote_granted;
 } msg_requestvote_response_t;
+
+/** Vice Vote request response message.
+ * Indicates if node has accepted the server's vote request. */
+typedef struct
+{
+    /** currentTerm, for candidate to update itself */
+    int term;
+
+    /** true means candidate received vote */
+    int vote_granted;
+} vice_msg_requestvote_response_t;
 
 /** Appendentries message.
  * This message is used to tell nodes if it's safe to apply entries to the FSM.
@@ -173,6 +205,21 @@ typedef int (
     void *user_data,
     raft_node_t* node,
     msg_requestvote_t* msg
+    );
+
+/** Callback for sending request vote messages.
+ * @param[in] raft The Raft server making this callback
+ * @param[in] user_data User data that is passed from Raft server
+ * @param[in] node The node's ID that we are sending this message to
+ * @param[in] msg The request vote message to be sent
+ * @return 0 on success */
+typedef int (
+*func_send_requestvicevote_f
+)   (
+    raft_server_t* raft,
+    void *user_data,
+    raft_node_t* node,
+    msg_requestvicevote_t* msg
     );
 
 /** Callback for sending append entries messages.
@@ -253,6 +300,38 @@ typedef int (
     int vote
     );
 
+
+    /** Callback for saving who we voted for to disk.
+     * For safety reasons this callback MUST flush the change to disk.
+     * @param[in] raft The Raft server making this callback
+     * @param[in] user_data User data that is passed from Raft server
+     * @param[in] vote The node we voted for
+     * @return 0 on success */
+    typedef int (
+    *func_persist_vice_vote_f
+    )   (
+        raft_server_t* raft,
+        void *user_data,
+        int vice_vote
+        );
+
+    /** Callback for saving current term (and nil vote) to disk.
+     * For safety reasons this callback MUST flush the term and vote changes to
+     * disk atomically.
+     * @param[in] raft The Raft server making this callback
+     * @param[in] user_data User data that is passed from Raft server
+     * @param[in] term Current term
+     * @param[in] vote The node value dicating we haven't voted for anybody
+     * @return 0 on success */
+    typedef int (
+    *func_persist_vice_term_f
+    )   (
+        raft_server_t* raft,
+        void *user_data,
+        int term,
+        int vice_vote
+        );
+
 /** Callback for saving log entry changes.
  *
  * This callback is used for:
@@ -287,6 +366,9 @@ typedef struct
     /** Callback for sending request vote messages */
     func_send_requestvote_f send_requestvote;
 
+    /** Callback for sending request vote messages */
+    func_send_requestvicevote_f send_requestvicevote;
+
     /** Callback for sending appendentries messages */
     func_send_appendentries_f send_appendentries;
 
@@ -303,6 +385,15 @@ typedef struct
      * For safety reasons this callback MUST flush the term and vote changes to
      * disk atomically. */
     func_persist_term_f persist_term;
+
+    /** Callback for persisting vote data
+     * For safety reasons this callback MUST flush the change to disk. */
+    func_persist_vice_vote_f persist_vice_vote;
+
+    /** Callback for persisting term (and nil vote) data
+     * For safety reasons this callback MUST flush the term and vote changes to
+     * disk atomically. */
+    func_persist_vice_term_f persist_vice_term;
 
     /** Callback for adding an entry to the log
      * For safety reasons this callback MUST flush the change to disk.
@@ -526,12 +617,21 @@ int raft_get_num_nodes(raft_server_t* me);
 int raft_get_num_voting_nodes(raft_server_t* me_);
 
 /**
+ * @return number of voting nodes that this server has */
+int raft_get_num_vice_voting_nodes(raft_server_t* me_);
+
+/**
  * @return number of items within log */
 int raft_get_log_count(raft_server_t* me);
 
 /**
  * @return current term */
 int raft_get_current_term(raft_server_t* me);
+
+
+/**
+ * @return current term */
+int raft_get_current_vice_term(raft_server_t* me);
 
 /**
  * @return current log index */
@@ -550,8 +650,16 @@ int raft_is_follower(raft_server_t* me);
 int raft_is_leader(raft_server_t* me);
 
 /**
+ * @return 1 if vice leader; 0 otherwise */
+int raft_is_vice_leader(raft_server_t* me);
+
+/**
  * @return 1 if candidate; 0 otherwise */
 int raft_is_candidate(raft_server_t* me);
+
+/**
+ * @return 1 if vice candidate; 0 otherwise */
+int raft_is_vice_candidate(raft_server_t* me);
 
 /**
  * @return currently elapsed timeout in milliseconds */
@@ -610,10 +718,20 @@ int raft_get_voted_for(raft_server_t* me);
  *   -1 if the leader is unknown */
 int raft_get_current_leader(raft_server_t* me);
 
+/** Get what this node thinks the node ID of the vice leader is.
+ * @return node of what this node thinks is the valid vice leader;
+ *   -1 if the vice leader is unknown */
+int raft_get_current_vice_leader(raft_server_t* me);
+
 /** Get what this node thinks the node of the leader is.
  * @return node of what this node thinks is the valid leader;
  *   NULL if the leader is unknown */
 raft_node_t* raft_get_current_leader_node(raft_server_t* me);
+
+/** Get what this node thinks the node of the vice leader is.
+ * @return node of what this node thinks is the valid vice leader;
+ *   NULL if the vice leader is unknown */
+raft_node_t* raft_get_current_vice_leader_node(raft_server_t* me);
 
 /**
  * @return callback user data */
@@ -633,12 +751,34 @@ int raft_vote(raft_server_t* me_, raft_node_t* node);
  *  0 on success */
 int raft_vote_for_nodeid(raft_server_t* me_, const int nodeid);
 
+/** Vote for a server.
+ * This should be used to reload persistent state, ie. the voted-for field.
+ * @param[in] node The server to vote for
+ * @return
+ *  0 on success */
+int raft_vice_vote(raft_server_t* me_, raft_node_t* node);
+
+/** Vote for a server.
+ * This should be used to reload persistent state, ie. the voted-for field.
+ * @param[in] nodeid The server to vote for by nodeid
+ * @return
+ *  0 on success */
+int raft_vice_vote_for_nodeid(raft_server_t* me_, const int nodeid);
+
 /** Set the current term.
  * This should be used to reload persistent state, ie. the current_term field.
  * @param[in] term The new current term
  * @return
  *  0 on success */
 int raft_set_current_term(raft_server_t* me, const int term);
+
+
+/** Set the current term.
+ * This should be used to reload persistent state, ie. the current_vice_term field.
+ * @param[in] term The new current term
+ * @return
+ *  0 on success */
+int raft_set_current_vice_term(raft_server_t* me, const int term);
 
 /** Set the commit idx.
  * This should be used to reload persistent state, ie. the commit_idx field.
@@ -663,7 +803,7 @@ int raft_msg_entry_response_committed(raft_server_t* me_,
  * @return ID of node */
 int raft_node_get_id(raft_node_t* me_);
 
-/** Tell if we are a leader, candidate or follower.
+/** Tell if we are a leader, candidae, vice_leader, vice_candida or follower.
  * @return get state of type raft_state_e. */
 int raft_get_state(raft_server_t* me_);
 
@@ -680,6 +820,10 @@ void raft_node_set_voting(raft_node_t* node, int voting);
  * @return 1 if this is a voting node. Otherwise 0. */
 int raft_node_is_voting(raft_node_t* me_);
 
+/** Tell if a node is a vice voting node or not.
+ * @return 1 if this is a vice voting node. Otherwise 0. */
+int raft_node_is_vice_voting(raft_node_t* me_);
+
 /** Apply all entries up to the commit index
  * @return
  *  0 on success;
@@ -690,6 +834,11 @@ int raft_apply_all(raft_server_t* me_);
  * WARNING: this is a dangerous function call. It could lead to your cluster
  * losing it's consensus guarantees. */
 void raft_become_leader(raft_server_t* me);
+
+/** Become vice leader
+ * WARNING: this is a dangerous function call. It could lead to your cluster
+ * losing it's consensus guarantees. */
+void raft_become_vice_leader(raft_server_t* me);
 
 /** Become follower. This may be used to give up leadership. It does not change
  * currentTerm. */

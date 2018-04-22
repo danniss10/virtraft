@@ -1,0 +1,15 @@
+# project  configured on Sun Apr 22 15:53:44 2018 by
+# waf 1.8.0 (abi 98, python 2070af0 on darwin)
+# using waf configure
+#
+----------------------------------------
+Setting top to
+/Users/mathewpregasen/dev/virtraft
+----------------------------------------
+Setting out to
+/Users/mathewpregasen/dev/virtraft/build
+----------------------------------------
+Checking for 'clang' (C compiler)
+find program=['clang'] paths=['/Applications/MAMP/bin/php/php7.1.1/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'] var='CC' -> ['/usr/bin/clang']
+find program=['ar'] paths=['/Applications/MAMP/bin/php/php7.1.1/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'] var='AR' -> ['/usr/bin/ar']
+/usr/bin/clang

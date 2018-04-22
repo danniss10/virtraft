@@ -17,7 +17,9 @@
 #include "raft.h"
 
 #define RAFT_NODE_VOTED_FOR_ME       1
+#define RAFT_NODE_VICE_VOTED_FOR_ME  (1 << 5)
 #define RAFT_NODE_VOTING             (1 << 1)
+#define RAFT_NODE_VICE_VOTING        (1 << 3)
 #define RAFT_NODE_HAS_SUFFICIENT_LOG (1 << 2)
 
 typedef struct
@@ -103,6 +105,33 @@ int raft_node_has_vote_for_me(raft_node_t* me_)
     return (me->flags & RAFT_NODE_VOTED_FOR_ME) != 0;
 }
 
+void raft_node_vice_vote_for_me(raft_node_t* me_, const int vote)
+{
+
+    printf("%s\n", "33");
+    raft_node_private_t* me = (raft_node_private_t*)me_;
+    if(me){
+      printf("%s\n", me->id);
+    }
+    printf("%s\n", "44");
+    if (vote) {
+      printf("%s\n", "45");
+      me->flags |= RAFT_NODE_VICE_VOTED_FOR_ME;
+    }
+    else {
+      printf("%s\n", "46");
+      printf("%d\n", me->flags);
+      me->flags &= ~RAFT_NODE_VICE_VOTED_FOR_ME;
+      printf("%s\n", "47");
+    }
+}
+
+int raft_node_has_vice_vote_for_me(raft_node_t* me_)
+{
+    raft_node_private_t* me = (raft_node_private_t*)me_;
+    return (me->flags & RAFT_NODE_VICE_VOTED_FOR_ME) != 0;
+}
+
 void raft_node_set_voting(raft_node_t* me_, int voting)
 {
     raft_node_private_t* me = (raft_node_private_t*)me_;
@@ -116,6 +145,12 @@ int raft_node_is_voting(raft_node_t* me_)
 {
     raft_node_private_t* me = (raft_node_private_t*)me_;
     return (me->flags & RAFT_NODE_VOTING) != 0;
+}
+
+int raft_node_is_vice_voting(raft_node_t* me_)
+{
+    raft_node_private_t* me = (raft_node_private_t*)me_;
+    return (me->flags & RAFT_NODE_VICE_VOTING) != 0;
 }
 
 void raft_node_set_has_sufficient_logs(raft_node_t* me_)
@@ -132,6 +167,10 @@ int raft_node_has_sufficient_logs(raft_node_t* me_)
 
 int raft_node_get_id(raft_node_t* me_)
 {
+  printf("%s\n", "qqq");
     raft_node_private_t* me = (raft_node_private_t*)me_;
-    return me->id;
+    printf("%s\n", "qq1");
+    int j = me->id;
+    printf("%s\n", "qq2");
+    return j;
 }

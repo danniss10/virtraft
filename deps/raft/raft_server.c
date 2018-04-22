@@ -30,6 +30,7 @@
 
 static void __log(raft_server_t *me_, raft_node_t* node, const char *fmt, ...)
 {
+    return;
     raft_server_private_t* me = (raft_server_private_t*)me_;
     if (me->cb.log == NULL) return;
     char buf[1024];
@@ -41,6 +42,27 @@ static void __log(raft_server_t *me_, raft_node_t* node, const char *fmt, ...)
     me->cb.log(me_, node, me->udata, buf);
 }
 
+void raft_randomize_vice_election_timeout(raft_server_t* me_)
+{
+    raft_server_private_t* me = (raft_server_private_t*)me_;
+    printf("%s\n", "raft_randomize_vice_election_timeout");
+    if(me->vice_election_timeout == 0){
+      me->vice_election_timeout = 1000;
+    }
+    printf("%d\n", me->election_timeout);
+    printf("%d\n", me->vice_election_timeout);
+
+    /* [election_timeout, 2 * election_timeout) */
+    me->vice_election_timeout_rand = me->vice_election_timeout + rand() % me->vice_election_timeout;
+    //printf("%d\n", me->vice_election_timeout_rand);
+    printf("%s\n", "1y");
+    printf("%d\n", me->vice_election_timeout_rand);
+
+    //__log(me_, NULL, "randomize vice election timeout to %d", me->vice_election_timeout_rand);
+    printf("%s\n", "1yy");
+
+}
+
 void raft_randomize_election_timeout(raft_server_t* me_)
 {
     raft_server_private_t* me = (raft_server_private_t*)me_;
@@ -48,7 +70,10 @@ void raft_randomize_election_timeout(raft_server_t* me_)
     /* [election_timeout, 2 * election_timeout) */
     me->election_timeout_rand = me->election_timeout + rand() % me->election_timeout;
     __log(me_, NULL, "randomize election timeout to %d", me->election_timeout_rand);
+    raft_randomize_vice_election_timeout(me_);
 }
+
+
 
 raft_server_t* raft_new()
 {
@@ -57,11 +82,16 @@ raft_server_t* raft_new()
     if (!me)
         return NULL;
     me->current_term = 0;
+    me->current_vice_term = 0;
     me->voted_for = -1;
     me->timeout_elapsed = 0;
     me->request_timeout = 200;
     me->election_timeout = 1000;
+    me->vice_timeout_elapsed = 0;
+    me->vice_request_timeout = 200;
+    me->vice_election_timeout = 1000;
     raft_randomize_election_timeout((raft_server_t*)me);
+    raft_randomize_vice_election_timeout((raft_server_t*)me);
     me->log = log_new();
     if (!me->log) {
         free(me);
@@ -70,6 +100,7 @@ raft_server_t* raft_new()
     me->voting_cfg_change_log_idx = -1;
     raft_set_state((raft_server_t*)me, RAFT_STATE_FOLLOWER);
     me->current_leader = NULL;
+    me->current_vice_leader = NULL;
     return (raft_server_t*)me;
 }
 
@@ -98,6 +129,7 @@ void raft_clear(raft_server_t* me_)
     me->voted_for = -1;
     me->timeout_elapsed = 0;
     raft_randomize_election_timeout(me_);
+    raft_randomize_vice_election_timeout(me_);
     me->voting_cfg_change_log_idx = -1;
     raft_set_state((raft_server_t*)me, RAFT_STATE_FOLLOWER);
     me->current_leader = NULL;
@@ -132,6 +164,25 @@ int raft_election_start(raft_server_t* me_)
     return raft_become_candidate(me_);
 }
 
+int raft_vice_election_start(raft_server_t* me_)
+{
+    printf("%s\n", "raft_vice_election_start");
+    raft_server_private_t* me = (raft_server_private_t*)me_;
+    printf("%s\n", "1a");
+    raft_randomize_vice_election_timeout(me_);
+    printf("%s\n", "1aa");
+    printf("%d::%d::%d\n", me->vice_election_timeout_rand, me->vice_timeout_elapsed, me->current_vice_term);
+
+    //__log(me_, NULL, "vice election starting: %d %d, term: %d ci: %d",
+    //      me->vice_election_timeout_rand, me->vice_timeout_elapsed, me->current_vice_term,
+    //raft_get_current_idx(me_));
+    printf("%s\n", "1b");
+
+    printf("%s\n", "raft_vice_election_start :br>");
+
+    return raft_become_vice_candidate(me_);
+}
+
 void raft_become_leader(raft_server_t* me_)
 {
     raft_server_private_t* me = (raft_server_private_t*)me_;
@@ -141,6 +192,43 @@ void raft_become_leader(raft_server_t* me_)
 
     raft_set_state(me_, RAFT_STATE_LEADER);
     me->timeout_elapsed = 0;
+    for (i = 0; i < me->num_nodes; i++)
+    {
+        if (me->node == me->nodes[i])
+            continue;
+
+
+        raft_node_t* node = me->nodes[i];
+        raft_node_set_next_idx(node, raft_get_current_idx(me_) + 1);
+        raft_node_set_match_idx(node, 0);
+        raft_send_appendentries(me_, node);
+    }
+
+    for (i = 0; i < me->num_nodes; i++)
+    {
+        if (me->node != me->nodes[i])
+            raft_vice_election_start(me->nodes[i]);
+            printf("%s\n", "gg");
+            break;
+
+    }
+    printf("%s\n", "yy");
+    for (i = 0; i < me->num_nodes; i++)
+    {
+        printf("%d\n", &me->nodes[i]);
+
+    }
+}
+
+void raft_become_vice_leader(raft_server_t* me_)
+{
+    raft_server_private_t* me = (raft_server_private_t*)me_;
+    int i;
+
+    __log(me_, NULL, "becoming vice leader term:%d", raft_get_current_vice_term(me_));
+
+    raft_set_state(me_, RAFT_STATE_VICE_LEADER);
+    me->vice_timeout_elapsed = 0;
     for (i = 0; i < me->num_nodes; i++)
     {
         if (me->node == me->nodes[i])
@@ -178,6 +266,43 @@ int raft_become_candidate(raft_server_t* me_)
     return 0;
 }
 
+int raft_become_vice_candidate(raft_server_t* me_)
+{
+    raft_server_private_t* me = (raft_server_private_t*)me_;
+
+    __log(me_, NULL, "becoming vice candidate");
+    printf("%s\n", "ff");
+    int e = raft_set_current_vice_term(me_, raft_get_current_vice_term(me_) + 1);
+    printf("%s\n", "fcx");
+
+    if (0 != e)
+        return e;
+    printf("%s\n", "fcx2");
+    int i;
+    for (i = 0; i < me->num_nodes; i++)
+        raft_node_vice_vote_for_me(me->nodes[i], 0);
+    printf("%s\n", "ff1");
+    if(me->node){
+      printf("%d\n", me->node);
+      printf("%s\n", "nulli");
+    }
+    raft_vice_vote(me_, me->node);
+    me->current_vice_leader = NULL;
+    raft_set_state(me_, RAFT_STATE_VICE_CANDIDATE);
+    printf("%s\n", "ff2");
+
+    raft_randomize_vice_election_timeout(me_);
+    me->timeout_elapsed = 0;
+
+    //for (i = 0; i < me->num_nodes; i++)
+        //if (me->node != me->nodes[i] && raft_node_is_vice_voting(me->nodes[i]))
+            //raft_send_requestvicevote(me_, me->nodes[i]);
+
+    printf("%s\n", "ff3");
+
+    return 0;
+}
+
 void raft_become_follower(raft_server_t* me_)
 {
     raft_server_private_t* me = (raft_server_private_t*)me_;
@@ -185,6 +310,7 @@ void raft_become_follower(raft_server_t* me_)
     __log(me_, NULL, "becoming follower");
     raft_set_state(me_, RAFT_STATE_FOLLOWER);
     raft_randomize_election_timeout(me_);
+    raft_randomize_vice_election_timeout(me_);
     me->timeout_elapsed = 0;
 }
 
@@ -211,6 +337,22 @@ int raft_periodic(raft_server_t* me_, int msec_since_last_period)
             raft_node_is_voting(raft_get_my_node(me_)))
         {
             int e = raft_election_start(me_);
+            if (0 != e)
+                return e;
+        }
+    }
+
+
+    if (me->state == RAFT_STATE_VICE_LEADER)
+    {
+
+    }
+    else if (me->vice_election_timeout_rand <= me->vice_timeout_elapsed)
+    {
+        if (1 < raft_get_num_vice_voting_nodes(me_) &&
+            raft_node_is_vice_voting(raft_get_my_node(me_)))
+        {
+            int e = raft_vice_election_start(me_);
             if (0 != e)
                 return e;
         }
@@ -563,7 +705,7 @@ done:
     return e;
 }
 
-int raft_votes_is_majority(const int num_nodes, const int nvotes)
+int s_is_majority(const int num_nodes, const int nvotes)
 {
     if (num_nodes < nvotes)
         return 0;
@@ -614,7 +756,7 @@ int raft_recv_requestvote_response(raft_server_t* me_,
             if (node)
                 raft_node_vote_for_me(node, 1);
             int votes = raft_get_nvotes_for_me(me_);
-            if (raft_votes_is_majority(raft_get_num_voting_nodes(me_), votes))
+            if (s_is_majority(raft_get_num_voting_nodes(me_), votes))
                 raft_become_leader(me_);
             break;
 
@@ -701,6 +843,26 @@ int raft_send_requestvote(raft_server_t* me_, raft_node_t* node)
     rv.candidate_id = raft_get_nodeid(me_);
     if (me->cb.send_requestvote)
         e = me->cb.send_requestvote(me_, me->udata, node, &rv);
+    return e;
+}
+
+int raft_send_requestvicevote(raft_server_t* me_, raft_node_t* node)
+{
+    raft_server_private_t* me = (raft_server_private_t*)me_;
+    msg_requestvicevote_t rv;
+    int e = 0;
+
+    assert(node);
+    assert(node != me->node);
+
+    __log(me_, node, "sending requestvicevote to: %d", node);
+
+    rv.vice_term = me->current_vice_term;
+    rv.last_log_idx = raft_get_current_idx(me_);
+    rv.last_log_term = raft_get_last_log_term(me_);
+    rv.vice_candidate_id = raft_get_nodeid(me_);
+    if (me->cb.send_requestvicevote)
+        e = me->cb.send_requestvicevote(me_, me->udata, node, &rv);
     return e;
 }
 
@@ -920,6 +1082,27 @@ int raft_vote_for_nodeid(raft_server_t* me_, const int nodeid)
             return e;
     }
     me->voted_for = nodeid;
+    return 0;
+}
+
+int raft_vice_vote(raft_server_t* me_, raft_node_t* node)
+{
+    printf("%s\n", "RR");
+    return raft_vice_vote_for_nodeid(me_, node ? raft_node_get_id(node) : -1);
+}
+
+int raft_vice_vote_for_nodeid(raft_server_t* me_, const int nodeid)
+{
+    printf("%s\n", "RR0");
+    raft_server_private_t* me = (raft_server_private_t*)me_;
+
+    //if (me->cb.persist_vice_vote) {
+    //    int e = me->cb.persist_vice_vote(me_, me->udata, nodeid);
+    //    if (0 != e)
+    //        return e;
+    //}
+    me->voted_for = nodeid;
+    printf("%s\n", "RR1");
     return 0;
 }
 

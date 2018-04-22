@@ -262,5 +262,10 @@ void log_free(log_t * me_)
 int log_get_current_idx(log_t* me_)
 {
     log_private_t* me = (log_private_t*)me_;
-    return log_count(me_) + me->base;
+    //printf("%s\n", "1j");
+    int ll = me->base;
+    //printf("%s\n", "1jg");
+    int vv = log_count(me_) + ll;
+    //printf("%s\n", "1js");
+    return vv;
 }

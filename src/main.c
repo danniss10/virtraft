@@ -341,6 +341,34 @@ static int __raft_persist_vote(
     return 0;
 }
 
+
+/** Raft callback for saving term field to disk.
+ * This only returns when change has been made to disk. */
+static int __raft_persist_vice_term(
+    raft_server_t* raft,
+    void *udata,
+    const int current_term,
+    const int vote
+    )
+{
+  printf("%s\n", "haha");
+    return 0;
+}
+
+// TODO
+/** Raft callback for saving voted_for field to disk.
+ * This only returns when change has been made to disk. */
+static int __raft_persist_vice_vote(
+    raft_server_t* raft,
+    void *udata,
+    const int voted_for
+    )
+{
+  printf("%s\n", "lol");
+
+    return 0;
+}
+
 /** Raft callback for displaying debugging information */
 void __raft_log(raft_server_t* raft, raft_node_t* node, void *udata,
                 const char *buf)
@@ -561,6 +589,8 @@ raft_cbs_t raft_funcs = {
     .applylog                    = __raft_applylog,
     .persist_vote                = __raft_persist_vote,
     .persist_term                = __raft_persist_term,
+    .persist_vice_vote           = __raft_persist_vice_vote,
+    .persist_vice_term           = __raft_persist_vice_term,
     .log_offer                   = __raft_logentry_offer,
     .log_poll                    = __raft_logentry_poll,
     .log_pop                     = __raft_logentry_pop,
@@ -824,36 +854,15 @@ static void __toggle_membership(server_t* node)
     }
 }
 
-typedef enum
-{
-    PUSH_ENTRY,
-    POLL_MESSAGES,
-    TOGGLE_MEMBERSHIP
-
-} scheduler_action;
-
-
-static scheduler_action __schedule_action() 
-{
-    return PUSH_ENTRY;
-}
-
 static void __periodic(system_t* sys)
 {
     if (opts.debug)
         printf("\n");
 
-    scheduler_action action = __schedule_action();
+    if (random() % 100 < sys->client_rate)
+        __push_entry(sys);
 
-    if (action == PUSH_ENTRY) {
-	__push_entry(sys);
-    }
-    //if (random() % 100 < sys->client_rate)
-    //    __push_entry(sys);
-
-    if (action == POLL_MESSAGE) {
-    	__poll_messages(sys);
-    }
+    __poll_messages(sys);
 
     int i;
     for (i = 0; i < sys->n_servers; i++)
@@ -891,6 +900,7 @@ static void __periodic(system_t* sys)
         sys->leadership_changes += 1;
 
     sys->leader = raft_get_current_leader_node(sys->servers[0].raft);
+    printf("leader: %d\n", (int) sys->leader);
 }
 
 #include "command_parser.c"

@@ -65,6 +65,17 @@ int raft_get_num_voting_nodes(raft_server_t* me_)
     return num;
 }
 
+
+int raft_get_num_vice_voting_nodes(raft_server_t* me_)
+{
+    raft_server_private_t* me = (raft_server_private_t*)me_;
+    int i, num = 0;
+    for (i = 0; i < me->num_nodes; i++)
+        if (raft_node_is_vice_voting(me->nodes[i]))
+            num++;
+    return num;
+}
+
 int raft_get_timeout_elapsed(raft_server_t* me_)
 {
     return ((raft_server_private_t*)me_)->timeout_elapsed;
@@ -100,14 +111,47 @@ int raft_set_current_term(raft_server_t* me_, const int term)
     return 0;
 }
 
+int raft_set_current_vice_term(raft_server_t* me_, const int term)
+{
+    printf("%s\n", "rr");
+    raft_server_private_t* me = (raft_server_private_t*)me_;
+    printf("%s\n", "rr1");
+    if (me->current_vice_term < term)
+    {
+        int voted_for = -1;
+        printf("%s\n", "rr2");
+        if (me->cb.persist_vice_term)
+        {
+            printf("%s\n", "rr2.1");
+
+            //int e = me->cb.persist_vice_term(me_, me->udata, term, voted_for);
+            printf("%s\n", "rr2.2");
+            //if (0 != e)
+                //return e;
+        }
+        printf("%s\n", "rr3");
+        me->current_vice_term = term;
+        printf("%s\n", "rr4");
+        me->voted_for = voted_for;
+    }
+    return 0;
+}
+
+
 int raft_get_current_term(raft_server_t* me_)
 {
     return ((raft_server_private_t*)me_)->current_term;
 }
 
+int raft_get_current_vice_term(raft_server_t* me_)
+{
+    return ((raft_server_private_t*)me_)->current_vice_term;
+}
+
 int raft_get_current_idx(raft_server_t* me_)
 {
     raft_server_private_t* me = (raft_server_private_t*)me_;
+    printf("%s\n", "1g");
     return log_get_current_idx(me->log);
 }
 
@@ -141,6 +185,8 @@ void raft_set_state(raft_server_t* me_, int state)
     /* if became the leader, then update the current leader entry */
     if (state == RAFT_STATE_LEADER)
         me->current_leader = me->node;
+    if (state == RAFT_STATE_VICE_LEADER)
+        me->current_vice_leader = me->node;
     me->state = state;
 }
 
@@ -148,6 +194,8 @@ int raft_get_state(raft_server_t* me_)
 {
     return ((raft_server_private_t*)me_)->state;
 }
+
+
 
 raft_node_t* raft_get_node(raft_server_t *me_, int nodeid)
 {
@@ -208,9 +256,19 @@ int raft_is_leader(raft_server_t* me_)
     return raft_get_state(me_) == RAFT_STATE_LEADER;
 }
 
+int raft_is_vice_leader(raft_server_t* me_)
+{
+    return raft_get_state(me_) == RAFT_STATE_VICE_LEADER;
+}
+
 int raft_is_candidate(raft_server_t* me_)
 {
     return raft_get_state(me_) == RAFT_STATE_CANDIDATE;
+}
+
+int raft_is_vice_candidate(raft_server_t* me_)
+{
+    return raft_get_state(me_) == RAFT_STATE_VICE_CANDIDATE;
 }
 
 int raft_get_last_log_term(raft_server_t* me_)

@@ -11,7 +11,7 @@ enum {
 /**
  * Copyright (c) 2013, Willem-Hendrik Thiart
  * Use of this source code is governed by a BSD-style license that can be
- * found in the LICENSE file. 
+ * found in the LICENSE file.
  *
  * @file
  * @author Willem Thiart himself@willemthiart.com
@@ -24,9 +24,17 @@ typedef struct {
      * starts at zero */
     int current_term;
 
+    /* the server's best guess of what the current vice term is
+     * starts at zero */
+    int current_vice_term;
+
     /* The candidate the server voted for in its current term,
      * or Nil if it hasn't voted for any.  */
     int voted_for;
+
+    /* The vice candidate the server voted for in its current term,
+     * or Nil if it hasn't voted for any.  */
+    int vice_voted_for;
 
     /* the log which is replicated */
     void* log;
@@ -45,6 +53,9 @@ typedef struct {
     /* amount of time left till timeout */
     int timeout_elapsed;
 
+    /* amount of time left till timeout */
+    int vice_timeout_elapsed;
+
     raft_node_t* nodes;
     int num_nodes;
 
@@ -52,9 +63,17 @@ typedef struct {
     int election_timeout_rand;
     int request_timeout;
 
+    int vice_election_timeout;
+    int vice_election_timeout_rand;
+    int vice_request_timeout;
+
     /* what this node thinks is the node ID of the current leader, or NULL if
      * there isn't a known current leader. */
     raft_node_t* current_leader;
+
+    /* what this node thinks is the node ID of the current leader, or NULL if
+     * there isn't a known current leader. */
+    raft_node_t* current_vice_leader;
 
     /* callbacks */
     raft_cbs_t cb;
@@ -74,6 +93,10 @@ typedef struct {
 int raft_election_start(raft_server_t* me);
 
 int raft_become_candidate(raft_server_t* me);
+
+int raft_vice_election_start(raft_server_t* me);
+
+int raft_become_vice_candidate(raft_server_t* me);
 
 void raft_randomize_election_timeout(raft_server_t* me_);
 
@@ -116,11 +139,17 @@ void raft_node_vote_for_me(raft_node_t* me_, const int vote);
 
 int raft_node_has_vote_for_me(raft_node_t* me_);
 
+void raft_node_vice_vote_for_me(raft_node_t* me_, const int vote);
+
+int raft_node_has_vice_vote_for_me(raft_node_t* me_);
+
 void raft_node_set_has_sufficient_logs(raft_node_t* me_);
 
 int raft_node_has_sufficient_logs(raft_node_t* me_);
 
 int raft_votes_is_majority(const int nnodes, const int nvotes);
+
+int raft_vice_votes_is_majority(const int nnodes, const int nvotes);
 
 void raft_pop_log(raft_server_t* me_, raft_entry_t* ety, const int idx);
 
